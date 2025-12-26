@@ -33,61 +33,67 @@ def decode_subject(raw_subject):
 def read_sent_emails():
     mail = imaplib.IMAP4_SSL(IMAP_SERVER)
     mail.login(EMAIL_USER, EMAIL_PASSWORD)
-
     mail.select('"[Gmail]/Sent Mail"')
 
-    results = {}
+    results = {
+        "Nouvelle demande d'aide": [],
+        "Nouvelle inscription bénévole": [],
+        "Bon de Don – Association AUBE Ait Bouyahia": []
+    }
 
     status, messages = mail.search(None, "ALL")
     mail_ids = messages[0].split()
 
-    for subject in TARGET_SUBJECTS:
-        rows = []
+    for mail_id in mail_ids:
+        status, msg_data = mail.fetch(mail_id, "(RFC822)")
+        msg = email.message_from_bytes(msg_data[0][1])
 
-        for mail_id in mail_ids:
-            status, msg_data = mail.fetch(mail_id, "(RFC822)")
-            msg = email.message_from_bytes(msg_data[0][1])
+        subject = decode_subject(msg["Subject"])
+        date = msg["Date"]
 
-            decoded_subject = decode_subject(msg["Subject"])
-            if subject not in decoded_subject:
-                continue
+        treated = False  # 🔐 sécurité
 
-            date = msg["Date"]
+        # Récupérer le texte
+        content = ""
+        if msg.is_multipart():
+            for part in msg.walk():
+                if part.get_content_type() == "text/plain":
+                    content += part.get_payload(decode=True).decode("utf-8", errors="ignore")
+        else:
+            content = msg.get_payload(decode=True).decode("utf-8", errors="ignore")
 
-            # Contenu texte
-            content = ""
-            if msg.is_multipart():
-                for part in msg.walk():
-                    if part.get_content_type() == "text/plain":
-                        content += part.get_payload(decode=True).decode("utf-8", errors="ignore")
-            else:
-                content = msg.get_payload(decode=True).decode("utf-8", errors="ignore")
+        if "Nouvelle demande d'aide" in subject:
+            row = parse_demande_aide(content)
+            results["Nouvelle demande d'aide"].append([date] + row)
+            treated = True
 
-            if subject == "Nouvelle demande d'aide":
-                nom, prenom, tel, message = parse_demande_aide(content)
-                rows.append([date, nom, prenom, tel, message])
+        elif "Nouvelle inscription bénévole" in subject:
+            row = parse_inscription_benevole(content)
+            results["Nouvelle inscription bénévole"].append([date] + row)
+            treated = True
 
-            elif subject == "Nouvelle inscription bénévole":
-                nom, prenom, tel, groupe, aides, autre = parse_inscription_benevole(content)
-                rows.append([date, nom, prenom, tel, groupe, aides, autre])
+        elif "Bon de Don – Association AUBE Ait Bouyahia" in subject:
+            pdf_path = None
+            for part in msg.walk():
+                if part.get_content_type() == "application/pdf":
+                    pdf_path = f"bon_{mail_id.decode()}.pdf"
+                    with open(pdf_path, "wb") as f:
+                        f.write(part.get_payload(decode=True))
 
-            elif subject == "Bon de Don – Association AUBE Ait Bouyahia":
-                pdf_path = None
-                for part in msg.walk():
-                    if part.get_content_type() == "application/pdf":
-                        pdf_path = f"bon_{mail_id.decode()}.pdf"
-                        with open(pdf_path, "wb") as f:
-                            f.write(part.get_payload(decode=True))
+            if pdf_path:
+                row = parse_bon_de_don_pdf(pdf_path)
+                results["Bon de Don – Association AUBE Ait Bouyahia"].append([date] + row)
+                os.remove(pdf_path)
+                treated = True
 
-                if pdf_path:
-                    numero, nom_benef, prenom_benef, nom_donateur, prenom_donateur, biens = parse_bon_de_don_pdf(pdf_path)
-                    rows.append([date, numero, nom_benef, prenom_benef, nom_donateur, prenom_donateur, biens])
-                    os.remove(pdf_path)
+        # ✅ supprimer UNIQUEMENT si traité
+        if treated:
+            mail.store(mail_id, '+FLAGS', '\\Deleted')
 
-        results[subject] = rows
-
+    mail.expunge()
     mail.logout()
     return results
+
 
 def parse_bon_de_don_pdf(pdf_path):
     text = extract_text(pdf_path)
