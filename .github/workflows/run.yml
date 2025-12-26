@@ -19,3 +19,11 @@ jobs:
 
       - name: Exécuter le script
         run: python rapport.py
+        env:
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+          IMAP_SERVER: ${{ secrets.IMAP_SERVER }}
+          SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+
+        
