@@ -5,6 +5,8 @@ import csv
 import smtplib
 from email.message import EmailMessage
 import os
+from pdfminer.high_level import extract_text
+import re
 
 # Secrets GitHub
 EMAIL_USER = os.environ["EMAIL_USER"]
@@ -64,7 +66,33 @@ def read_sent_emails():
             else:
                 content = msg.get_payload(decode=True).decode("utf-8", errors="ignore")
 
-            rows.append([date, decoded_subject, content])
+            if subject == "Nouvelle demande d'aide":
+                nom, prenom, tel, message = parse_demande_aide(content)
+                rows.append([date, nom, prenom, tel, message])
+            
+            elif subject == "Bon de Don – Association AUBE Ait Bouyahia":
+                # Récupérer la pièce jointe PDF
+                pdf_path = None
+                for part in msg.walk():
+                    if part.get_content_type() == "application/pdf":
+                        pdf_path = f"bon_{mail_id.decode()}.pdf"
+                        with open(pdf_path, "wb") as f:
+                            f.write(part.get_payload(decode=True))
+            
+                if pdf_path:
+                    numero, nom_donateur, prenom_donateur, nom_benef, prenom_benef, biens = parse_bon_de_don_pdf(pdf_path)
+                    rows.append([date, numero, nom_benef, prenom_benef, nom_donateur, prenom_donateur, biens])
+            
+                        
+            elif subject == "Nouvelle inscription bénévole":
+                nom, prenom, tel, groupe, aides, autre = parse_inscription_benevole(content)
+                rows.append([date, nom, prenom, tel, groupe, aides, autre])
+
+            
+            else:
+                rows.append([date, decoded_subject, content])
+
+
 
         results[subject] = rows
 
@@ -73,19 +101,123 @@ def read_sent_emails():
 
 
 
+def parse_bon_de_don_pdf(pdf_path):
+    text = extract_text(pdf_path)
+
+    text = (
+        text.replace("Ã©", "é")
+            .replace("Ã¨", "è")
+            .replace("Ã", "à")
+            .replace("â€™", "'")
+    )
+
+    numero = re.search(r"Num[eé]ro du bon\s*:\s*(.*)", text)
+    donateur_nom = re.search(r"DONATEUR\s*Nom\s*:\s*(.*)", text)
+    donateur_prenom = re.search(r"DONATEUR.*?Pr[eé]nom\s*:\s*(.*)", text, re.DOTALL)
+    beneficiaire_nom = re.search(r"B[ÉE]N[ÉE]FICIAIRE.*?Nom\s*:\s*(.*)", text, re.DOTALL)
+    beneficiaire_prenom = re.search(r"B[ÉE]N[ÉE]FICIAIRE.*?Pr[eé]nom\s*:\s*(.*)", text, re.DOTALL)
+    biens = re.search(r"Bien\s*\(s\)\s*:\s*(.*)", text)
+
+    return [
+        numero.group(1).strip() if numero else "",
+        beneficiaire_nom.group(1).strip() if beneficiaire_nom else "",
+        beneficiaire_prenom.group(1).strip() if beneficiaire_prenom else "",
+        donateur_nom.group(1).strip() if donateur_nom else "",
+        donateur_prenom.group(1).strip() if donateur_prenom else "",
+        biens.group(1).strip() if biens else ""
+    ]
+
+
+
+
+def parse_demande_aide(content):
+    # Nettoyage encodage
+    content = content.replace("Ã©", "é").replace("Ã¨", "è").replace("Ã", "à").replace("â€™", "'")
+
+    # Extraction par regex
+    nom = re.search(r"Nom:\s*(.*)", content)
+    prenom = re.search(r"Pr[ée]nom:\s*(.*)", content)
+    tel = re.search(r"T[ée]l[ée]phone:\s*(.*)", content)
+    message = re.search(r"Message:\s*(.*)", content)
+
+    return [
+        nom.group(1).strip() if nom else "",
+        prenom.group(1).strip() if prenom else "",
+        tel.group(1).strip() if tel else "",
+        message.group(1).strip() if message else ""
+    ]
+
+
+
+
+def parse_inscription_benevole(content):
+    content = (
+        content.replace("Ã©", "é")
+               .replace("Ã¨", "è")
+               .replace("Ã", "à")
+               .replace("â€™", "'")
+               .replace("\r", "")
+               .strip()
+    )
+
+    nom = re.search(r"Nom:\s*(.*)", content)
+    prenom = re.search(r"Pr[ée]nom:\s*(.*)", content)
+    tel = re.search(r"T[ée]l[ée]phone:\s*(.*)", content)
+    groupe = re.search(r"Groupe sanguin:\s*(.*)", content)
+    aides = re.search(r"Aides proposées:\s*(.*?)(?:Autre:|$)", content, re.DOTALL)
+    autre = re.search(r"Autre:\s*(.*)", content)
+
+    return [
+        nom.group(1).strip() if nom else "",
+        prenom.group(1).strip() if prenom else "",
+        tel.group(1).strip() if tel else "",
+        groupe.group(1).strip() if groupe else "",
+        aides.group(1).strip().replace("\n", " ") if aides else "",
+        autre.group(1).strip() if autre else ""
+    ]
+
+
+
+
+
 def generate_csv(data):
     filenames = []
 
     for subject, rows in data.items():
-        filename = f"{subject.replace(' ', '_')}.csv"
+        filename = f"{subject.replace(' ', '_').replace('–', '-')}.csv"
         filenames.append(filename)
 
         with open(filename, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
-            writer.writerow(["Date", "Objet", "Contenu"])
+
+            # Colonnes selon le type d'email
+            if subject == "Nouvelle inscription bénévole":
+                writer.writerow([
+                    "Date", "Nom", "Prénom", "Téléphone",
+                    "Groupe sanguin", "Aides proposées", "Autre"
+                ])
+
+
+            elif subject == "Nouvelle demande d'aide":
+                writer.writerow([
+                    "Date", "Nom", "Prénom", "Téléphone", "Message"
+                ])
+
+            elif subject == "Bon de Don – Association AUBE Ait Bouyahia":
+                writer.writerow([
+                    "Date", "Numéro bon", "Nom bénéficiaire",
+                    "Prénom bénéficiaire", "Nom donateur",
+                    "Prénom donateur", "Biens"
+                ])
+
+            else:
+                writer.writerow(["Date", "Objet", "Contenu"])
+
+            # Écriture des lignes
             writer.writerows(rows)
 
     return filenames
+
 
 def send_email_with_csv(files):
     msg = EmailMessage()
