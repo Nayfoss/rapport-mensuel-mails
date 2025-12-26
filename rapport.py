@@ -92,35 +92,37 @@ def read_sent_emails():
 def parse_bon_de_don_pdf(pdf_path):
     text = extract_text(pdf_path)
 
-    text = (
-        text.replace("Ã©", "é")
-            .replace("Ã¨", "è")
-            .replace("Ã", "à")
-            .replace("â€™", "'")
-    )
+    # Nettoyage encodage
+    text = text.replace("Ã©", "é").replace("Ã¨", "è").replace("Ã", "à").replace("â€™", "'")
 
     # Numéro du bon
     numero = re.search(r"Num[eé]ro du bon\s*:\s*(.*)", text)
-    
-    # DONATEUR
-    donateur_nom = re.search(r"DONATEUR\s*\nNom\s*:\s*(.*)", text)
-    donateur_prenom = re.search(r"DONATEUR\s*\nNom\s*:.*\nPr[eé]nom\s*:\s*(.*)", text)
-    
-    # BÉNÉFICIAIRE
-    beneficiaire_nom = re.search(r"B[ÉE]N[ÉE]FICIAIRE.*\nNom\s*:\s*(.*)", text)
-    beneficiaire_prenom = re.search(r"B[ÉE]N[ÉE]FICIAIRE.*\nNom\s*:.*\nPr[eé]nom\s*:\s*(.*)", text)
-    
+    numero = numero.group(1).strip() if numero else ""
+
+    # Fonction pour récupérer Nom / Prénom d'une section
+    def extract_nom_prenom(section_name):
+        pattern = rf"{section_name}.*?Nom\s*:\s*(.*?)(?:\n|$).*?Pr[eé]nom\s*:\s*(.*?)(?:\n|$)"
+        m = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
+        if m:
+            return m.group(1).strip(), m.group(2).strip()
+        return "", ""
+
+    donateur_nom, donateur_prenom = extract_nom_prenom("DONATEUR")
+    beneficiaire_nom, beneficiaire_prenom = extract_nom_prenom("BÉNÉFICIAIRE")
+
     # Biens donnés
-    biens = re.search(r"Bien\s*\(s\)\s*:\s*(.*)", text)
+    biens_match = re.search(r"Bien\s*\(s\)\s*:\s*(.*)", text)
+    biens = biens_match.group(1).strip() if biens_match else ""
 
     return [
-        numero.group(1).strip() if numero else "",
-        beneficiaire_nom.group(1).strip() if beneficiaire_nom else "",
-        beneficiaire_prenom.group(1).strip() if beneficiaire_prenom else "",
-        donateur_nom.group(1).strip() if donateur_nom else "",
-        donateur_prenom.group(1).strip() if donateur_prenom else "",
-        biens.group(1).strip() if biens else ""
+        numero,
+        beneficiaire_nom,
+        beneficiaire_prenom,
+        donateur_nom,
+        donateur_prenom,
+        biens
     ]
+
 
 
 def parse_demande_aide(content):
