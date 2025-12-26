@@ -99,11 +99,18 @@ def parse_bon_de_don_pdf(pdf_path):
             .replace("â€™", "'")
     )
 
+    # Numéro du bon
     numero = re.search(r"Num[eé]ro du bon\s*:\s*(.*)", text)
-    donateur_nom = re.search(r"DONATEUR\s*Nom\s*:\s*(.*)", text)
-    donateur_prenom = re.search(r"DONATEUR.*?Pr[eé]nom\s*:\s*(.*)", text, re.DOTALL)
-    beneficiaire_nom = re.search(r"B[ÉE]N[ÉE]FICIAIRE.*?Nom\s*:\s*(.*)", text, re.DOTALL)
-    beneficiaire_prenom = re.search(r"B[ÉE]N[ÉE]FICIAIRE.*?Pr[eé]nom\s*:\s*(.*)", text, re.DOTALL)
+    
+    # DONATEUR
+    donateur_nom = re.search(r"DONATEUR\s*\nNom\s*:\s*(.*)", text)
+    donateur_prenom = re.search(r"DONATEUR\s*\nNom\s*:.*\nPr[eé]nom\s*:\s*(.*)", text)
+    
+    # BÉNÉFICIAIRE
+    beneficiaire_nom = re.search(r"B[ÉE]N[ÉE]FICIAIRE.*\nNom\s*:\s*(.*)", text)
+    beneficiaire_prenom = re.search(r"B[ÉE]N[ÉE]FICIAIRE.*\nNom\s*:.*\nPr[eé]nom\s*:\s*(.*)", text)
+    
+    # Biens donnés
     biens = re.search(r"Bien\s*\(s\)\s*:\s*(.*)", text)
 
     return [
@@ -114,6 +121,7 @@ def parse_bon_de_don_pdf(pdf_path):
         donateur_prenom.group(1).strip() if donateur_prenom else "",
         biens.group(1).strip() if biens else ""
     ]
+
 
 def parse_demande_aide(content):
     content = content.replace("Ã©", "é").replace("Ã¨", "è").replace("Ã", "à").replace("â€™", "'")
