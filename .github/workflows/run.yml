@@ -1,7 +1,9 @@
 name: Rapport mensuel
 
 on:
-  workflow_dispatch:  # permet de lancer manuellement
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 1 * *'
 
 jobs:
   run-script:
