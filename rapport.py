@@ -37,11 +37,10 @@ def read_sent_emails():
 
     for subject in TARGET_SUBJECTS:
 
-        # Recherche IMAP compatible UTF‑8
-        search_criteria = f'(SUBJECT "{subject}")'.encode("utf-8")
-        status, messages = mail.search("UTF-8", search_criteria)
-
+        # Recherche IMAP simple (Gmail-friendly)
+        status, messages = mail.search(None, "ALL")
         mail_ids = messages[0].split()
+
         rows = []
 
         for mail_id in mail_ids:
@@ -49,6 +48,11 @@ def read_sent_emails():
             msg = email.message_from_bytes(msg_data[0][1])
 
             decoded_subject = decode_subject(msg["Subject"])
+
+            # Filtrer en Python (car IMAP ne supporte pas UTF‑8)
+            if subject not in decoded_subject:
+                continue
+
             date = msg["Date"]
 
             # Récupérer le contenu
@@ -66,6 +70,7 @@ def read_sent_emails():
 
     mail.logout()
     return results
+
 
 
 def generate_csv(data):
