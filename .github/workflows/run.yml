@@ -1,0 +1,21 @@
+name: Rapport mensuel
+
+on:
+  workflow_dispatch:  # permet de lancer manuellement
+
+jobs:
+  run-script:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Installer Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Installer dépendances
+        run: pip install -r requirements.txt
+
+      - name: Exécuter le script
+        run: python rapport.py
