@@ -36,9 +36,12 @@ def read_sent_emails():
     results = {}
 
     for subject in TARGET_SUBJECTS:
-        status, messages = mail.search(None, f'(SUBJECT "{subject}")')
-        mail_ids = messages[0].split()
 
+        # Recherche IMAP compatible UTF‑8
+        search_criteria = f'(SUBJECT "{subject}")'.encode("utf-8")
+        status, messages = mail.search("UTF-8", search_criteria)
+
+        mail_ids = messages[0].split()
         rows = []
 
         for mail_id in mail_ids:
@@ -63,6 +66,7 @@ def read_sent_emails():
 
     mail.logout()
     return results
+
 
 def generate_csv(data):
     filenames = []
