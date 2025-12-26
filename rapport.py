@@ -23,26 +23,25 @@ TARGET_SUBJECTS = [
 ]
 
 def decode_subject(raw_subject):
+    if raw_subject is None:
+        return ""
     subject, encoding = decode_header(raw_subject)[0]
     if isinstance(subject, bytes):
-        subject = subject.decode(encoding or "utf-8")
+        subject = subject.decode(encoding or "utf-8", errors="ignore")
     return subject
 
 def read_sent_emails():
     mail = imaplib.IMAP4_SSL(IMAP_SERVER)
     mail.login(EMAIL_USER, EMAIL_PASSWORD)
 
-    # Ouvrir le dossier "Sent"
     mail.select('"[Gmail]/Sent Mail"')
 
     results = {}
 
+    status, messages = mail.search(None, "ALL")
+    mail_ids = messages[0].split()
+
     for subject in TARGET_SUBJECTS:
-
-        # Recherche IMAP simple (Gmail-friendly)
-        status, messages = mail.search(None, "ALL")
-        mail_ids = messages[0].split()
-
         rows = []
 
         for mail_id in mail_ids:
@@ -50,16 +49,14 @@ def read_sent_emails():
             msg = email.message_from_bytes(msg_data[0][1])
 
             decoded_subject = decode_subject(msg["Subject"])
-
-            # Filtrer en Python (car IMAP ne supporte pas UTF‑8)
             if subject not in decoded_subject:
                 continue
 
             date = msg["Date"]
 
-            # Récupérer le contenu
+            # Contenu texte
+            content = ""
             if msg.is_multipart():
-                content = ""
                 for part in msg.walk():
                     if part.get_content_type() == "text/plain":
                         content += part.get_payload(decode=True).decode("utf-8", errors="ignore")
@@ -69,37 +66,28 @@ def read_sent_emails():
             if subject == "Nouvelle demande d'aide":
                 nom, prenom, tel, message = parse_demande_aide(content)
                 rows.append([date, nom, prenom, tel, message])
-            
+
+            elif subject == "Nouvelle inscription bénévole":
+                nom, prenom, tel, groupe, aides, autre = parse_inscription_benevole(content)
+                rows.append([date, nom, prenom, tel, groupe, aides, autre])
+
             elif subject == "Bon de Don – Association AUBE Ait Bouyahia":
-                # Récupérer la pièce jointe PDF
                 pdf_path = None
                 for part in msg.walk():
                     if part.get_content_type() == "application/pdf":
                         pdf_path = f"bon_{mail_id.decode()}.pdf"
                         with open(pdf_path, "wb") as f:
                             f.write(part.get_payload(decode=True))
-            
+
                 if pdf_path:
-                    numero, nom_donateur, prenom_donateur, nom_benef, prenom_benef, biens = parse_bon_de_don_pdf(pdf_path)
+                    numero, nom_benef, prenom_benef, nom_donateur, prenom_donateur, biens = parse_bon_de_don_pdf(pdf_path)
                     rows.append([date, numero, nom_benef, prenom_benef, nom_donateur, prenom_donateur, biens])
-            
-                        
-            elif subject == "Nouvelle inscription bénévole":
-                nom, prenom, tel, groupe, aides, autre = parse_inscription_benevole(content)
-                rows.append([date, nom, prenom, tel, groupe, aides, autre])
-
-            
-            else:
-                rows.append([date, decoded_subject, content])
-
-
+                    os.remove(pdf_path)
 
         results[subject] = rows
 
     mail.logout()
     return results
-
-
 
 def parse_bon_de_don_pdf(pdf_path):
     text = extract_text(pdf_path)
@@ -127,14 +115,9 @@ def parse_bon_de_don_pdf(pdf_path):
         biens.group(1).strip() if biens else ""
     ]
 
-
-
-
 def parse_demande_aide(content):
-    # Nettoyage encodage
     content = content.replace("Ã©", "é").replace("Ã¨", "è").replace("Ã", "à").replace("â€™", "'")
 
-    # Extraction par regex
     nom = re.search(r"Nom:\s*(.*)", content)
     prenom = re.search(r"Pr[ée]nom:\s*(.*)", content)
     tel = re.search(r"T[ée]l[ée]phone:\s*(.*)", content)
@@ -146,9 +129,6 @@ def parse_demande_aide(content):
         tel.group(1).strip() if tel else "",
         message.group(1).strip() if message else ""
     ]
-
-
-
 
 def parse_inscription_benevole(content):
     content = (
@@ -176,10 +156,6 @@ def parse_inscription_benevole(content):
         autre.group(1).strip() if autre else ""
     ]
 
-
-
-
-
 def generate_csv(data):
     filenames = []
 
@@ -190,34 +166,18 @@ def generate_csv(data):
         with open(filename, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
 
-            # Colonnes selon le type d'email
             if subject == "Nouvelle inscription bénévole":
-                writer.writerow([
-                    "Date", "Nom", "Prénom", "Téléphone",
-                    "Groupe sanguin", "Aides proposées", "Autre"
-                ])
-
+                writer.writerow(["Date", "Nom", "Prénom", "Téléphone", "Groupe sanguin", "Aides proposées", "Autre"])
 
             elif subject == "Nouvelle demande d'aide":
-                writer.writerow([
-                    "Date", "Nom", "Prénom", "Téléphone", "Message"
-                ])
+                writer.writerow(["Date", "Nom", "Prénom", "Téléphone", "Message"])
 
             elif subject == "Bon de Don – Association AUBE Ait Bouyahia":
-                writer.writerow([
-                    "Date", "Numéro bon", "Nom bénéficiaire",
-                    "Prénom bénéficiaire", "Nom donateur",
-                    "Prénom donateur", "Biens"
-                ])
+                writer.writerow(["Date", "Numéro bon", "Nom bénéficiaire", "Prénom bénéficiaire", "Nom donateur", "Prénom donateur", "Biens"])
 
-            else:
-                writer.writerow(["Date", "Objet", "Contenu"])
-
-            # Écriture des lignes
             writer.writerows(rows)
 
     return filenames
-
 
 def send_email_with_csv(files):
     msg = EmailMessage()
@@ -228,12 +188,7 @@ def send_email_with_csv(files):
 
     for file in files:
         with open(file, "rb") as f:
-            msg.add_attachment(
-                f.read(),
-                maintype="text",
-                subtype="csv",
-                filename=file
-            )
+            msg.add_attachment(f.read(), maintype="text", subtype="csv", filename=file)
 
     with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT) as smtp:
         smtp.login(EMAIL_USER, EMAIL_PASSWORD)
