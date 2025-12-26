@@ -196,20 +196,47 @@ def generate_csv(data):
 
     return filenames
 
-def send_email_with_csv(files):
+
+from datetime import datetime, timedelta
+
+def get_previous_month():
+    today = datetime.today()
+    first_day_this_month = today.replace(day=1)
+    last_day_previous_month = first_day_this_month - timedelta(days=1)
+
+    year = last_day_previous_month.year
+    month = last_day_previous_month.month
+
+    return year, month
+
+ef send_email_with_csv(files):
+    year, month = get_previous_month()
+
     msg = EmailMessage()
-    msg["Subject"] = "Rapport mensuel"
+    msg["Subject"] = f"Rapport mensuel {year}_{month:02d}"
     msg["From"] = EMAIL_USER
     msg["To"] = EMAIL_USER
-    msg.set_content("Voici les rapports mensuels en pièces jointes.")
+
+    msg.set_content(
+        f"Bonjour,\n\n"
+        f"Veuillez trouver ci-joint le rapport du mois {month:02d}/{year}.\n\n"
+        f"Cordialement."
+    )
 
     for file in files:
         with open(file, "rb") as f:
-            msg.add_attachment(f.read(), maintype="text", subtype="csv", filename=file)
+            msg.add_attachment(
+                f.read(),
+                maintype="text",
+                subtype="csv",
+                filename=file
+            )
 
     with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT) as smtp:
         smtp.login(EMAIL_USER, EMAIL_PASSWORD)
         smtp.send_message(msg)
+
+
 
 def main():
     data = read_sent_emails()
