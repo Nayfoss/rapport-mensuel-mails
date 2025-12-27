@@ -209,13 +209,14 @@ def get_previous_month():
 
     return year, month
 
+REPORT_RECEIVER = "aubeaitbouyahia09@gmail.com" 
 def send_email_with_csv(files):
     year, month = get_previous_month()
 
     msg = EmailMessage()
     msg["Subject"] = f"Rapport mensuel {year}_{month:02d}"
     msg["From"] = EMAIL_USER
-    msg["To"] = EMAIL_USER
+    msg["To"] = REPORT_RECEIVER
 
     msg.set_content(
         f"Bonjour,\n\n"
