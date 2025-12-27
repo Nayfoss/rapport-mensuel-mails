@@ -209,7 +209,7 @@ def get_previous_month():
 
     return year, month
 
-ef send_email_with_csv(files):
+def send_email_with_csv(files):
     year, month = get_previous_month()
 
     msg = EmailMessage()
