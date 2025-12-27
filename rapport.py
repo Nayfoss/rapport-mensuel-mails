@@ -17,7 +17,7 @@ SMTP_PORT = int(os.environ["SMTP_PORT"])
 
 # Les 3 objets que tu veux filtrer
 TARGET_SUBJECTS = [
-    "Bon de Don – Association AUBE Ait Bouyahia",
+    "Bon de Don Association AUBE Ait Bouyahia",
     "Nouvelle demande d'aide",
     "Nouvelle inscription bénévole"
 ]
