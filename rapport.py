@@ -38,7 +38,7 @@ def read_sent_emails():
     results = {
         "Nouvelle demande d'aide": [],
         "Nouvelle inscription bénévole": [],
-        "Bon de Don – Association AUBE Ait Bouyahia": []
+        "Bon de Don Association AUBE Ait Bouyahia": []
     }
 
     status, messages = mail.search(None, "ALL")
